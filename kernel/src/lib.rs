@@ -16,6 +16,7 @@ extern crate tock_regs;
 
 pub use tock_regs::{register_bitfields, register_bitmasks};
 
+pub mod capabilities;
 #[macro_use]
 pub mod common;
 #[macro_use]
