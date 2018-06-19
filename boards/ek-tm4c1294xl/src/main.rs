@@ -6,12 +6,13 @@
 
 extern crate capsules;
 #[allow(unused_imports)]
-#[macro_use(debug, static_init)]
+#[macro_use(debug, static_init, create_capability)]
 extern crate kernel;
 extern crate cortexm4;
 extern crate tm4c129x;
 
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
+use kernel::capabilities;
 use kernel::hil;
 use kernel::hil::Controller;
 use kernel::Platform;
@@ -80,6 +81,12 @@ pub unsafe fn reset_handler() {
     tm4c129x::sysctl::PSYSCTLM
         .setup_system_clock(tm4c129x::sysctl::SystemClockSource::PllPioscAt120MHz);
 
+    // Create capabilities that the board needs to call certain protected kernel
+    // functions.
+    let process_mgmt_cap = create_capability!(capabilities::ProcessManagementCapability);
+    let main_cap = create_capability!(capabilities::MainLoopCapability);
+    let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
+
     let console = static_init!(
         capsules::console::Console<tm4c129x::uart::UART>,
         capsules::console::Console::new(
@@ -87,7 +94,7 @@ pub unsafe fn reset_handler() {
             115200,
             &mut capsules::console::WRITE_BUF,
             &mut capsules::console::READ_BUF,
-            kernel::Grant::create()
+            kernel::Grant::create(&grant_cap)
         )
     );
     hil::uart::UART::set_client(&tm4c129x::uart::UART0, console);
@@ -106,7 +113,7 @@ pub unsafe fn reset_handler() {
     );
     let alarm = static_init!(
         capsules::alarm::AlarmDriver<'static, VirtualMuxAlarm<'static, tm4c129x::gpt::AlarmTimer>>,
-        capsules::alarm::AlarmDriver::new(virtual_alarm1, kernel::Grant::create())
+        capsules::alarm::AlarmDriver::new(virtual_alarm1, kernel::Grant::create(&grant_cap))
     );
     virtual_alarm1.set_client(alarm);
 
@@ -156,7 +163,7 @@ pub unsafe fn reset_handler() {
     );
     let button = static_init!(
         capsules::button::Button<'static, tm4c129x::gpio::GPIOPin>,
-        capsules::button::Button::new(button_pins, kernel::Grant::create())
+        capsules::button::Button::new(button_pins, kernel::Grant::create(&grant_cap))
     );
     for &(btn, _) in button_pins.iter() {
         btn.set_client(button);
@@ -184,7 +191,7 @@ pub unsafe fn reset_handler() {
         console: console,
         alarm: alarm,
         gpio: gpio,
-        ipc: kernel::ipc::IPC::new(),
+        ipc: kernel::ipc::IPC::new(&grant_cap),
         led: led,
         button: button,
     };
@@ -213,6 +220,13 @@ pub unsafe fn reset_handler() {
         &mut APP_MEMORY,
         &mut PROCESSES,
         FAULT_RESPONSE,
+        &process_mgmt_cap,
     );
-    board_kernel.kernel_loop(&tm4c1294, &mut chip, &mut PROCESSES, Some(&tm4c1294.ipc));
+    board_kernel.kernel_loop(
+        &tm4c1294,
+        &mut chip,
+        &mut PROCESSES,
+        Some(&tm4c1294.ipc),
+        &main_cap,
+    );
 }

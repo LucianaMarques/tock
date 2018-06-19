@@ -12,7 +12,7 @@
 
 extern crate capsules;
 #[allow(unused_imports)]
-#[macro_use(debug, debug_gpio, static_init)]
+#[macro_use(debug, debug_gpio, static_init, create_capability)]
 extern crate kernel;
 extern crate cortexm4;
 extern crate sam4l;
@@ -24,6 +24,7 @@ use capsules::rf233::RF233;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use capsules::virtual_i2c::{I2CDevice, MuxI2C};
 use capsules::virtual_spi::{MuxSpiMaster, VirtualSpiMasterDevice};
+use kernel::capabilities;
 use kernel::hil;
 use kernel::hil::radio;
 use kernel::hil::radio::{RadioConfig, RadioData};
@@ -246,6 +247,12 @@ pub unsafe fn reset_handler() {
 
     set_pin_primary_functions();
 
+    // Create capabilities that the board needs to call certain protected kernel
+    // functions.
+    let process_mgmt_cap = create_capability!(capabilities::ProcessManagementCapability);
+    let main_cap = create_capability!(capabilities::MainLoopCapability);
+    let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
+
     power::configure_submodules(power::SubmoduleConfig {
         rf233: true,
         nrf51422: true,
@@ -262,7 +269,7 @@ pub unsafe fn reset_handler() {
             115200,
             &mut capsules::console::WRITE_BUF,
             &mut capsules::console::READ_BUF,
-            kernel::Grant::create()
+            kernel::Grant::create(&grant_cap)
         )
     );
     hil::uart::UART::set_client(&sam4l::usart::USART3, console);
@@ -300,7 +307,7 @@ pub unsafe fn reset_handler() {
     );
     let alarm = static_init!(
         AlarmDriver<'static, VirtualMuxAlarm<'static, sam4l::ast::Ast>>,
-        AlarmDriver::new(virtual_alarm1, kernel::Grant::create())
+        AlarmDriver::new(virtual_alarm1, kernel::Grant::create(&grant_cap))
     );
     virtual_alarm1.set_client(alarm);
 
@@ -328,7 +335,7 @@ pub unsafe fn reset_handler() {
 
     let ambient_light = static_init!(
         capsules::ambient_light::AmbientLight<'static>,
-        capsules::ambient_light::AmbientLight::new(isl29035, kernel::Grant::create())
+        capsules::ambient_light::AmbientLight::new(isl29035, kernel::Grant::create(&grant_cap))
     );
     hil::sensors::AmbientLight::set_client(isl29035, ambient_light);
 
@@ -374,12 +381,12 @@ pub unsafe fn reset_handler() {
     si7021_alarm.set_client(si7021);
     let temp = static_init!(
         capsules::temperature::TemperatureSensor<'static>,
-        capsules::temperature::TemperatureSensor::new(si7021, kernel::Grant::create())
+        capsules::temperature::TemperatureSensor::new(si7021, kernel::Grant::create(&grant_cap))
     );
     kernel::hil::sensors::TemperatureDriver::set_client(si7021, temp);
     let humidity = static_init!(
         capsules::humidity::HumiditySensor<'static>,
-        capsules::humidity::HumiditySensor::new(si7021, kernel::Grant::create())
+        capsules::humidity::HumiditySensor::new(si7021, kernel::Grant::create(&grant_cap))
     );
     kernel::hil::sensors::HumidityDriver::set_client(si7021, humidity);
 
@@ -415,7 +422,7 @@ pub unsafe fn reset_handler() {
     sam4l::gpio::PC[13].set_client(fxos8700);
     let ninedof = static_init!(
         capsules::ninedof::NineDof<'static>,
-        capsules::ninedof::NineDof::new(fxos8700, kernel::Grant::create())
+        capsules::ninedof::NineDof::new(fxos8700, kernel::Grant::create(&grant_cap))
     );
     hil::sensors::NineDof::set_client(fxos8700, ninedof);
 
@@ -501,7 +508,7 @@ pub unsafe fn reset_handler() {
 
     let button = static_init!(
         capsules::button::Button<'static, sam4l::gpio::GPIOPin>,
-        capsules::button::Button::new(button_pins, kernel::Grant::create())
+        capsules::button::Button::new(button_pins, kernel::Grant::create(&grant_cap))
     );
     for &(btn, _) in button_pins.iter() {
         btn.set_client(button);
@@ -509,7 +516,7 @@ pub unsafe fn reset_handler() {
 
     let crc = static_init!(
         capsules::crc::Crc<'static, sam4l::crccu::Crccu<'static>>,
-        capsules::crc::Crc::new(&mut sam4l::crccu::CRCCU, kernel::Grant::create())
+        capsules::crc::Crc::new(&mut sam4l::crccu::CRCCU, kernel::Grant::create(&grant_cap))
     );
 
     rf233_spi.set_client(rf233);
@@ -556,7 +563,11 @@ pub unsafe fn reset_handler() {
 
     let radio_driver = static_init!(
         capsules::ieee802154::RadioDriver<'static>,
-        capsules::ieee802154::RadioDriver::new(radio_mac, kernel::Grant::create(), &mut RADIO_BUF)
+        capsules::ieee802154::RadioDriver::new(
+            radio_mac,
+            kernel::Grant::create(&grant_cap),
+            &mut RADIO_BUF
+        )
     );
 
     mac_device.set_key_procedure(radio_driver);
@@ -579,7 +590,7 @@ pub unsafe fn reset_handler() {
             'static,
             capsules::usbc_client::Client<'static, sam4l::usbc::Usbc<'static>>,
         >,
-        capsules::usb_user::UsbSyscallDriver::new(usb_client, kernel::Grant::create())
+        capsules::usb_user::UsbSyscallDriver::new(usb_client, kernel::Grant::create(&grant_cap))
     );
 
     sam4l::flashcalw::FLASH_CONTROLLER.configure();
@@ -598,7 +609,7 @@ pub unsafe fn reset_handler() {
         capsules::nonvolatile_storage_driver::NonvolatileStorage<'static>,
         capsules::nonvolatile_storage_driver::NonvolatileStorage::new(
             nv_to_page,
-            kernel::Grant::create(),
+            kernel::Grant::create(&grant_cap),
             0x60000, // Start address for userspace accessible region
             0x20000, // Length of userspace accessible region
             0,       // Start address of kernel accessible region
@@ -620,7 +631,7 @@ pub unsafe fn reset_handler() {
         button: button,
         crc: crc,
         spi: spi_syscalls,
-        ipc: kernel::ipc::IPC::new(),
+        ipc: kernel::ipc::IPC::new(&grant_cap),
         ninedof: ninedof,
         radio_driver: radio_driver,
         usb_driver: usb_driver,
@@ -661,7 +672,8 @@ pub unsafe fn reset_handler() {
         &mut APP_MEMORY,
         &mut PROCESSES,
         FAULT_RESPONSE,
+        &process_mgmt_cap,
     );
 
-    board_kernel.kernel_loop(&imix, &mut chip, &mut PROCESSES, Some(&imix.ipc));
+    board_kernel.kernel_loop(&imix, &mut chip, &mut PROCESSES, Some(&imix.ipc), &main_cap);
 }
