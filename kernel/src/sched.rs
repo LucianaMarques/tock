@@ -6,6 +6,7 @@ use core::ptr::NonNull;
 
 use callback;
 use callback::{AppId, Callback};
+use capabilities;
 use common::cells::NumericCellExt;
 use ipc;
 use mem::AppSlice;
@@ -59,6 +60,7 @@ impl Kernel {
         chip: &mut C,
         processes: &'static mut [Option<&mut process::Process<'static>>],
         ipc: Option<&ipc::IPC>,
+        _capability: &capabilities::MainLoopCapability,
     ) {
         let processes = unsafe {
             process::PROCS = processes;

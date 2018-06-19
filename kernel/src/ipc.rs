@@ -7,6 +7,7 @@
 pub const DRIVER_NUM: usize = 0x00010000;
 
 use callback::{AppId, Callback};
+use capabilities::MemoryAllocationCapability;
 use driver::Driver;
 use grant::Grant;
 use mem::{AppSlice, Shared};
@@ -34,9 +35,9 @@ pub struct IPC {
 }
 
 impl IPC {
-    pub unsafe fn new() -> IPC {
+    pub fn new(capability: &MemoryAllocationCapability) -> IPC {
         IPC {
-            data: Grant::create(),
+            data: Grant::create(capability),
         }
     }
 

@@ -1,6 +1,7 @@
 //! Data structure to store a list of userspace applications.
 
 use callback::AppId;
+use capabilities::MemoryAllocationCapability;
 use core::marker::PhantomData;
 use core::mem::size_of;
 use core::ops::{Deref, DerefMut};
@@ -168,12 +169,14 @@ impl<T: 'a + ?Sized> DerefMut for Borrowed<'a, T> {
 }
 
 impl<T: Default> Grant<T> {
-    pub unsafe fn create() -> Grant<T> {
-        let ctr = read_volatile(&CONTAINER_COUNTER);
-        write_volatile(&mut CONTAINER_COUNTER, ctr + 1);
-        Grant {
-            grant_num: ctr,
-            ptr: PhantomData,
+    pub fn create(_capability: &MemoryAllocationCapability) -> Grant<T> {
+        unsafe {
+            let ctr = read_volatile(&CONTAINER_COUNTER);
+            write_volatile(&mut CONTAINER_COUNTER, ctr + 1);
+            Grant {
+                grant_num: ctr,
+                ptr: PhantomData,
+            }
         }
     }
 
