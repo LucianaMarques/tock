@@ -9,7 +9,7 @@ extern crate cc26x2;
 extern crate cc26xx;
 
 #[allow(unused_imports)]
-#[macro_use(debug, debug_gpio, static_init, create_capability)]
+#[macro_use(create_capability, debug, debug_gpio, static_init)]
 extern crate kernel;
 
 use cc26xx::aon;
@@ -71,9 +71,10 @@ pub unsafe fn reset_handler() {
 
     // Create capabilities that the board needs to call certain protected kernel
     // functions.
-    let process_mgmt_cap = create_capability!(capabilities::ProcessManagementCapability);
-    let main_cap = create_capability!(capabilities::MainLoopCapability);
-    let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
+    let process_management_capability =
+        create_capability!(capabilities::ProcessManagementCapability);
+    let main_loop_capability = create_capability!(capabilities::MainLoopCapability);
+    let memory_allocation_capability = create_capability!(capabilities::MemoryAllocationCapability);
 
     // Setup AON event defaults
     aon::AON_EVENT.setup();
@@ -125,7 +126,10 @@ pub unsafe fn reset_handler() {
     );
     let button = static_init!(
         capsules::button::Button<'static, cc26xx::gpio::GPIOPin>,
-        capsules::button::Button::new(button_pins, kernel::Grant::create(&grant_cap))
+        capsules::button::Button::new(
+            button_pins,
+            kernel::Grant::create(&memory_allocation_capability)
+        )
     );
     for &(btn, _) in button_pins.iter() {
         btn.set_client(button);
@@ -140,7 +144,7 @@ pub unsafe fn reset_handler() {
             115200,
             &mut capsules::console::WRITE_BUF,
             &mut capsules::console::READ_BUF,
-            kernel::Grant::create(&grant_cap)
+            kernel::Grant::create(&memory_allocation_capability)
         )
     );
     kernel::hil::uart::UART::set_client(&cc26xx::uart::UART0, console);
@@ -204,13 +208,19 @@ pub unsafe fn reset_handler() {
             'static,
             capsules::virtual_alarm::VirtualMuxAlarm<'static, cc26xx::rtc::Rtc>,
         >,
-        capsules::alarm::AlarmDriver::new(virtual_alarm1, kernel::Grant::create(&grant_cap))
+        capsules::alarm::AlarmDriver::new(
+            virtual_alarm1,
+            kernel::Grant::create(&memory_allocation_capability)
+        )
     );
     virtual_alarm1.set_client(alarm);
 
     let rng = static_init!(
         capsules::rng::SimpleRng<'static, cc26xx::trng::Trng>,
-        capsules::rng::SimpleRng::new(&cc26xx::trng::TRNG, kernel::Grant::create(&grant_cap))
+        capsules::rng::SimpleRng::new(
+            &cc26xx::trng::TRNG,
+            kernel::Grant::create(&memory_allocation_capability)
+        )
     );
     cc26xx::trng::TRNG.set_client(rng);
 
@@ -238,14 +248,14 @@ pub unsafe fn reset_handler() {
         &mut APP_MEMORY,
         &mut PROCESSES,
         FAULT_RESPONSE,
-        &process_mgmt_cap,
+        &process_management_capability,
     );
 
     board_kernel.kernel_loop(
         &launchxl,
         &mut chip,
         &mut PROCESSES,
-        Some(&kernel::ipc::IPC::new(&grant_cap)),
-        &main_cap,
+        Some(&kernel::ipc::IPC::new(&memory_allocation_capability)),
+        &main_loop_capability,
     );
 }
