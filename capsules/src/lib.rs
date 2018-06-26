@@ -58,4 +58,5 @@ pub mod usbc_client;
 pub mod virtual_alarm;
 pub mod virtual_flash;
 pub mod virtual_i2c;
+pub mod virtual_pwm;
 pub mod virtual_spi;
