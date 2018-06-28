@@ -60,7 +60,7 @@ pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 /// A structure representing this platform that holds references to all
 /// capsules for this platform.
 struct Hail {
-    console: &'static capsules::console::Console<'static, sam4l::usart::USART>,
+    // console: &'static capsules::console::Console<'static, sam4l::usart::USART>,
     gpio: &'static capsules::gpio::GPIO<'static, sam4l::gpio::GPIOPin>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
@@ -91,7 +91,7 @@ impl Platform for Hail {
         F: FnOnce(Option<&kernel::Driver>) -> R,
     {
         match driver_num {
-            capsules::console::DRIVER_NUM => f(Some(self.console)),
+            // capsules::console::DRIVER_NUM => f(Some(self.console)),
             capsules::gpio::DRIVER_NUM => f(Some(self.gpio)),
 
             capsules::alarm::DRIVER_NUM => f(Some(self.alarm)),
@@ -200,17 +200,19 @@ pub unsafe fn reset_handler() {
 
     let mut chip = sam4l::chip::Sam4l::new();
 
-    let console = static_init!(
-        capsules::console::Console<sam4l::usart::USART>,
-        capsules::console::Console::new(
-            &sam4l::usart::USART0,
-            115200,
-            &mut capsules::console::WRITE_BUF,
-            &mut capsules::console::READ_BUF,
-            kernel::Grant::create()
-        )
-    );
-    hil::uart::UART::set_client(&sam4l::usart::USART0, console);
+    // let console = static_init!(
+    //     capsules::console::Console<sam4l::usart::USART>,
+    //     capsules::console::Console::new(
+    //         &sam4l::usart::USART0,
+    //         115200,
+    //         &mut capsules::console::WRITE_BUF,
+    //         &mut capsules::console::READ_BUF,
+    //         kernel::Grant::create()
+    //     )
+    // );
+    // hil::uart::UART::set_client(&sam4l::usart::USART0, console);
+
+
 
     // Create the Nrf51822Serialization driver for passing BLE commands
     // over UART to the nRF51822 radio.
@@ -448,7 +450,7 @@ pub unsafe fn reset_handler() {
     );
 
     let hail = Hail {
-        console: console,
+        // console: console,
         gpio: gpio,
         alarm: alarm,
         ambient_light: ambient_light,
@@ -476,17 +478,42 @@ pub unsafe fn reset_handler() {
     }
     sam4l::gpio::PA[17].set();
 
-    hail.console.initialize();
+    let debugger = static_init!(
+        kernel::debug::DebugWriter,
+        kernel::debug::DebugWriter::new(
+            &sam4l::usart::USART0,
+            &mut kernel::debug::OUTPUT_BUF,
+            &mut kernel::debug::INTERNAL_BUF,
+        )
+    );
+    hil::uart::UART::set_client(&sam4l::usart::USART0, debugger);
+
+    let debug_wrapper = static_init!(
+        kernel::debug::DebugWriterWrapper,
+        kernel::debug::DebugWriterWrapper::new(debugger)
+    );
+
+    let p = hil::uart::UARTParams {
+        baud_rate: 115200,
+        stop_bits: hil::uart::StopBits::One,
+        parity: hil::uart::Parity::None,
+        hw_flow_control: false,
+    };
+    hil::uart::UART::init(&sam4l::usart::USART0, p);
+
+    kernel::debug::set_debug_writer_wrapper(debug_wrapper);
+
+    // hail.console.initialize();
     // Attach the kernel debug interface to this console
-    let kc = static_init!(capsules::console::App, capsules::console::App::default());
-    kernel::debug::assign_console_driver(Some(hail.console), kc);
+    // let kc = static_init!(capsules::console::App, capsules::console::App::default());
+    // kernel::debug::assign_console_driver(Some(hail.console), kc);
 
     hail.nrf51822.initialize();
 
     // Uncomment to measure overheads for TakeCell and MapCell:
     // test_take_map_cell::test_take_map_cell();
 
-    // debug!("Initialization complete. Entering main loop");
+    debug!("Initialization complete. Entering main loop");
 
     let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new());
 
