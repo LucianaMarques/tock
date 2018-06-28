@@ -24,6 +24,7 @@ use capsules::rf233::RF233;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use capsules::virtual_i2c::{I2CDevice, MuxI2C};
 use capsules::virtual_spi::{MuxSpiMaster, VirtualSpiMasterDevice};
+use capsules::virtual_uart::{UartDevice, UartMux};
 use kernel::hil;
 use kernel::hil::radio;
 use kernel::hil::radio::{RadioConfig, RadioData};
@@ -82,7 +83,7 @@ type RF233Device =
     capsules::rf233::RF233<'static, VirtualSpiMasterDevice<'static, sam4l::spi::SpiHw>>;
 
 struct Imix {
-    console: &'static capsules::console::Console<'static, sam4l::usart::USART>,
+    console: &'static capsules::console::Console<'static, UartDevice<'static>>,
     gpio: &'static capsules::gpio::GPIO<'static, sam4l::gpio::GPIOPin>,
     alarm: &'static AlarmDriver<'static, VirtualMuxAlarm<'static, sam4l::ast::Ast<'static>>>,
     temp: &'static capsules::temperature::TemperatureSensor<'static>,
@@ -255,22 +256,47 @@ pub unsafe fn reset_handler() {
 
     // # CONSOLE
 
+    // Create a shared UART channel for the console and for kernel debug.
+    let uart_mux = static_init!(
+        UartMux<'static>,
+        UartMux::new(&sam4l::usart::USART3, &mut capsules::virtual_uart::RX_BUF)
+    );
+    hil::uart::UART::set_client(&sam4l::usart::USART3, uart_mux);
+
+    // Create a UartDevice for the console.
+    let console_uart = static_init!(UartDevice, UartDevice::new(uart_mux, true));
+    console_uart.setup();
     let console = static_init!(
-        capsules::console::Console<sam4l::usart::USART>,
+        capsules::console::Console<UartDevice>,
         capsules::console::Console::new(
-            &sam4l::usart::USART3,
+            console_uart,
             115200,
             &mut capsules::console::WRITE_BUF,
             &mut capsules::console::READ_BUF,
             kernel::Grant::create()
         )
     );
-    hil::uart::UART::set_client(&sam4l::usart::USART3, console);
+    hil::uart::UART::set_client(console_uart, console);
     console.initialize();
 
-    // Attach the kernel debug interface to this console
-    let kc = static_init!(capsules::console::App, capsules::console::App::default());
-    kernel::debug::assign_console_driver(Some(console), kc);
+    // Create virtual device for kernel debug.
+    let debugger_uart = static_init!(UartDevice, UartDevice::new(uart_mux, false));
+    debugger_uart.setup();
+    let debugger = static_init!(
+        kernel::debug::DebugWriter,
+        kernel::debug::DebugWriter::new(
+            debugger_uart,
+            &mut kernel::debug::OUTPUT_BUF,
+            &mut kernel::debug::INTERNAL_BUF,
+        )
+    );
+    hil::uart::UART::set_client(debugger_uart, debugger);
+
+    let debug_wrapper = static_init!(
+        kernel::debug::DebugWriterWrapper,
+        kernel::debug::DebugWriterWrapper::new(debugger)
+    );
+    kernel::debug::set_debug_writer_wrapper(debug_wrapper);
 
     // Create the Nrf51822Serialization driver for passing BLE commands
     // over UART to the nRF51822 radio.

@@ -18,6 +18,7 @@ extern crate sam4l;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use capsules::virtual_i2c::{I2CDevice, MuxI2C};
 use capsules::virtual_spi::{MuxSpiMaster, VirtualSpiMasterDevice};
+use capsules::virtual_uart::{UartDevice, UartMux};
 use kernel::hil;
 use kernel::hil::spi::SpiMaster;
 use kernel::hil::Controller;
@@ -60,7 +61,7 @@ pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 /// A structure representing this platform that holds references to all
 /// capsules for this platform.
 struct Hail {
-    // console: &'static capsules::console::Console<'static, sam4l::usart::USART>,
+    console: &'static capsules::console::Console<'static, UartDevice<'static>>,
     gpio: &'static capsules::gpio::GPIO<'static, sam4l::gpio::GPIOPin>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
@@ -91,7 +92,7 @@ impl Platform for Hail {
         F: FnOnce(Option<&kernel::Driver>) -> R,
     {
         match driver_num {
-            // capsules::console::DRIVER_NUM => f(Some(self.console)),
+            capsules::console::DRIVER_NUM => f(Some(self.console)),
             capsules::gpio::DRIVER_NUM => f(Some(self.gpio)),
 
             capsules::alarm::DRIVER_NUM => f(Some(self.alarm)),
@@ -200,19 +201,27 @@ pub unsafe fn reset_handler() {
 
     let mut chip = sam4l::chip::Sam4l::new();
 
-    // let console = static_init!(
-    //     capsules::console::Console<sam4l::usart::USART>,
-    //     capsules::console::Console::new(
-    //         &sam4l::usart::USART0,
-    //         115200,
-    //         &mut capsules::console::WRITE_BUF,
-    //         &mut capsules::console::READ_BUF,
-    //         kernel::Grant::create()
-    //     )
-    // );
-    // hil::uart::UART::set_client(&sam4l::usart::USART0, console);
+    // Create a shared UART channel for the console and for kernel debug.
+    let uart_mux = static_init!(
+        UartMux<'static>,
+        UartMux::new(&sam4l::usart::USART0, &mut capsules::virtual_uart::RX_BUF)
+    );
+    hil::uart::UART::set_client(&sam4l::usart::USART0, uart_mux);
 
-
+    // Create a UartDevice for the console.
+    let console_uart = static_init!(UartDevice, UartDevice::new(uart_mux, true));
+    console_uart.setup();
+    let console = static_init!(
+        capsules::console::Console<UartDevice>,
+        capsules::console::Console::new(
+            console_uart,
+            115200,
+            &mut capsules::console::WRITE_BUF,
+            &mut capsules::console::READ_BUF,
+            kernel::Grant::create()
+        )
+    );
+    hil::uart::UART::set_client(console_uart, console);
 
     // Create the Nrf51822Serialization driver for passing BLE commands
     // over UART to the nRF51822 radio.
@@ -450,7 +459,7 @@ pub unsafe fn reset_handler() {
     );
 
     let hail = Hail {
-        // console: console,
+        console: console,
         gpio: gpio,
         alarm: alarm,
         ambient_light: ambient_light,
@@ -478,35 +487,27 @@ pub unsafe fn reset_handler() {
     }
     sam4l::gpio::PA[17].set();
 
+    // Initialize the UART bus.
+    hail.console.initialize();
+
+    // Create virtual device for kernel debug.
+    let debugger_uart = static_init!(UartDevice, UartDevice::new(uart_mux, false));
+    debugger_uart.setup();
     let debugger = static_init!(
         kernel::debug::DebugWriter,
         kernel::debug::DebugWriter::new(
-            &sam4l::usart::USART0,
+            debugger_uart,
             &mut kernel::debug::OUTPUT_BUF,
             &mut kernel::debug::INTERNAL_BUF,
         )
     );
-    hil::uart::UART::set_client(&sam4l::usart::USART0, debugger);
+    hil::uart::UART::set_client(debugger_uart, debugger);
 
     let debug_wrapper = static_init!(
         kernel::debug::DebugWriterWrapper,
         kernel::debug::DebugWriterWrapper::new(debugger)
     );
-
-    let p = hil::uart::UARTParams {
-        baud_rate: 115200,
-        stop_bits: hil::uart::StopBits::One,
-        parity: hil::uart::Parity::None,
-        hw_flow_control: false,
-    };
-    hil::uart::UART::init(&sam4l::usart::USART0, p);
-
     kernel::debug::set_debug_writer_wrapper(debug_wrapper);
-
-    // hail.console.initialize();
-    // Attach the kernel debug interface to this console
-    // let kc = static_init!(capsules::console::App, capsules::console::App::default());
-    // kernel::debug::assign_console_driver(Some(hail.console), kc);
 
     hail.nrf51822.initialize();
 
