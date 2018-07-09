@@ -1,10 +1,16 @@
 //! Implementation of registers and bitfields.
 //!
-//! Allows register maps to be specified like this:
+//! Provides efficient mechanisms to express and use type-checked memory mapped
+//! registers and bitfields.
 //!
 //! ```rust
-//! use common::registers::{ReadOnly, ReadWrite, WriteOnly};
+//! # #[macro_use]
+//! # extern crate tock_registers;
+//! # fn main() {}
 //!
+//! use tock_registers::registers::{ReadOnly, ReadWrite};
+//!
+//! // Register maps are specified like this:
 //! #[repr(C)]
 //! struct Registers {
 //!     // Control register: read-write
@@ -12,12 +18,22 @@
 //!     // Status register: read-only
 //!     s: ReadOnly<u32, Status::Register>,
 //! }
-//! ```
 //!
-//! and register fields and definitions to look like:
-//!
-//! ```rust
+//! // Register fields and definitions look like this:
 //! register_bitfields![u32,
+//!     // Simpler bitfields are expressed concisely:
+//!     Control [
+//!         /// Stop the Current Transfer
+//!         STOP 8,
+//!         /// Software Reset
+//!         SWRST 7,
+//!         /// Master Disable
+//!         MDIS 1,
+//!         /// Master Enable
+//!         MEN 0
+//!     ],
+//!
+//!     // More complex registers can express subtypes:
 //!     Status [
 //!         TXCOMPLETE  OFFSET(0) NUMBITS(1) [],
 //!         TXINTERRUPT OFFSET(1) NUMBITS(1) [],
@@ -41,6 +57,22 @@
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Add, AddAssign, BitAnd, BitOr, Not, Shl, Shr};
+
+register_bitfields![u32,
+    Status [
+        TXCOMPLETE  OFFSET(0) NUMBITS(1) [],
+        TXINTERRUPT OFFSET(1) NUMBITS(1) [],
+        RXCOMPLETE  OFFSET(2) NUMBITS(1) [],
+        RXINTERRUPT OFFSET(3) NUMBITS(1) [],
+        MODE        OFFSET(4) NUMBITS(3) [
+            FullDuplex = 0,
+            HalfDuplex = 1,
+            Loopback = 2,
+            Disabled = 3
+        ],
+        ERRORCOUNT OFFSET(6) NUMBITS(3) []
+    ]
+];
 
 /// IntLike properties needed to read/write/modify a register.
 pub trait IntLike:
