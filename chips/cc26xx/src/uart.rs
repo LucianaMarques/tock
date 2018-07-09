@@ -3,7 +3,7 @@ use core::cell::Cell;
 use gpio;
 use ioc;
 use kernel;
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::gpio::Pin;
 use kernel::hil::uart;
@@ -119,13 +119,14 @@ impl UART {
         self.set_baud_rate(params.baud_rate);
 
         // Set word length
-        let regs = &*self.registers;
-        regs.lcrh.write(LineControl::WORD_LENGTH::Len8);
+        let registers = &*self.registers;
+        registers.lcrh.write(LineControl::WORD_LENGTH::Len8);
 
         self.fifo_enable();
 
         // Enable UART, RX and TX
-        regs.ctl
+        registers
+            .ctl
             .write(Control::UART_ENABLE::SET + Control::RX_ENABLE::SET + Control::TX_ENABLE::SET);
     }
 
@@ -139,42 +140,42 @@ impl UART {
         // Fractional baud rate divider
         let div = (((MCU_CLOCK * 8) / baud_rate) + 1) / 2;
         // Set the baud rate
-        let regs = &*self.registers;
-        regs.ibrd.write(IntDivisor::DIVISOR.val(div / 64));
-        regs.fbrd.write(FracDivisor::DIVISOR.val(div % 64));
+        let registers = &*self.registers;
+        registers.ibrd.write(IntDivisor::DIVISOR.val(div / 64));
+        registers.fbrd.write(FracDivisor::DIVISOR.val(div % 64));
     }
 
     fn fifo_enable(&self) {
-        let regs = &*self.registers;
-        regs.lcrh.modify(LineControl::FIFO_ENABLE::SET);
+        let registers = &*self.registers;
+        registers.lcrh.modify(LineControl::FIFO_ENABLE::SET);
     }
 
     fn fifo_disable(&self) {
-        let regs = &*self.registers;
-        regs.lcrh.modify(LineControl::FIFO_ENABLE::CLEAR);
+        let registers = &*self.registers;
+        registers.lcrh.modify(LineControl::FIFO_ENABLE::CLEAR);
     }
 
     fn disable(&self) {
         self.fifo_disable();
-        let regs = &*self.registers;
-        regs.ctl.modify(
+        let registers = &*self.registers;
+        registers.ctl.modify(
             Control::UART_ENABLE::CLEAR + Control::TX_ENABLE::CLEAR + Control::RX_ENABLE::CLEAR,
         );
     }
 
     fn disable_interrupts(&self) {
         // Disable all UART interrupts
-        let regs = &*self.registers;
-        regs.imsc.modify(Interrupts::ALL_INTERRUPTS::CLEAR);
+        let registers = &*self.registers;
+        registers.imsc.modify(Interrupts::ALL_INTERRUPTS::CLEAR);
         // Clear all UART interrupts
-        regs.icr.write(Interrupts::ALL_INTERRUPTS::SET);
+        registers.icr.write(Interrupts::ALL_INTERRUPTS::SET);
     }
 
     /// Clears all interrupts related to UART.
     pub fn handle_interrupt(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         // Clear interrupts
-        regs.icr.write(Interrupts::ALL_INTERRUPTS::SET);
+        registers.icr.write(Interrupts::ALL_INTERRUPTS::SET);
     }
 
     /// Transmits a single byte if the hardware is ready.
@@ -182,14 +183,14 @@ impl UART {
         // Wait for space in FIFO
         while !self.tx_ready() {}
         // Put byte in data register
-        let regs = &*self.registers;
-        regs.dr.set(c as u32);
+        let registers = &*self.registers;
+        registers.dr.set(c as u32);
     }
 
     /// Checks if there is space in the transmit fifo queue.
     pub fn tx_ready(&self) -> bool {
-        let regs = &*self.registers;
-        !regs.fr.is_set(Flags::TX_FIFO_FULL)
+        let registers = &*self.registers;
+        !registers.fr.is_set(Flags::TX_FIFO_FULL)
     }
 }
 

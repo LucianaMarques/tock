@@ -22,7 +22,7 @@
 
 use core::cell::Cell;
 use kernel::common::cells::OptionalCell;
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::rng::{self, Continue};
 
@@ -124,7 +124,7 @@ impl Trng<'a> {
 
     /// RNG Interrupt handler
     pub fn handle_interrupt(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         self.disable_interrupts();
 
@@ -134,7 +134,7 @@ impl Trng<'a> {
                 // 3 lines below to change data in Cell, perhaps it can be done more nicely
                 let mut rn = self.randomness.get();
                 // 1 byte randomness
-                let r = regs.value.get();
+                let r = registers.value.get();
                 //  e = 0 -> byte 1 LSB
                 //  e = 1 -> byte 2
                 //  e = 2 -> byte 3
@@ -170,26 +170,26 @@ impl Trng<'a> {
     }
 
     fn enable_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenset.write(Intenset::VALRDY::SET);
+        let registers = &*self.registers;
+        registers.intenset.write(Intenset::VALRDY::SET);
     }
 
     fn disable_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenclr.write(Intenclr::VALRDY::SET);
+        let registers = &*self.registers;
+        registers.intenclr.write(Intenclr::VALRDY::SET);
     }
 
     fn start_rng(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         // Reset `valrdy`
-        regs.event_valrdy.write(Event::READY::CLEAR);
+        registers.event_valrdy.write(Event::READY::CLEAR);
 
         // Enable interrupts
         self.enable_interrupts();
 
         // Start rng
-        regs.task_start.write(Task::ENABLE::SET);
+        registers.task_start.write(Task::ENABLE::SET);
     }
 }
 

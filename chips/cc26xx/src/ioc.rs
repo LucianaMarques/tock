@@ -5,7 +5,7 @@
 //! Required to setup and configure IO pins to different modes - all depending on
 //! usage (eg. UART, GPIO, etc). It is used internally.
 
-use kernel::common::regs::ReadWrite;
+use kernel::common::registers::ReadWrite;
 use kernel::common::StaticRef;
 use kernel::hil;
 
@@ -53,8 +53,8 @@ impl IocfgPin {
     }
 
     pub fn enable_gpio(&self) {
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
 
         // In order to configure the pin for GPIO we need to clear
         // the lower 6 bits.
@@ -62,8 +62,8 @@ impl IocfgPin {
     }
 
     pub fn set_input_mode(&self, mode: hil::gpio::InputMode) {
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
 
         let field = match mode {
             hil::gpio::InputMode::PullDown => IoConfiguration::PULL_CTL::PullDown,
@@ -76,21 +76,21 @@ impl IocfgPin {
 
     pub fn enable_output(&self) {
         // Enable by disabling input
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
         pin_ioc.modify(IoConfiguration::IE::CLEAR);
     }
 
     pub fn enable_input(&self) {
         // Set IE (Input Enable) bit
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
         pin_ioc.modify(IoConfiguration::IE::SET);
     }
 
     pub fn enable_interrupt(&self, mode: hil::gpio::InterruptMode) {
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
 
         let ioc_edge_mode = match mode {
             hil::gpio::InterruptMode::FallingEdge => IoConfiguration::EDGE_DET::NegativeEdge,
@@ -102,15 +102,15 @@ impl IocfgPin {
     }
 
     pub fn disable_interrupt(&self) {
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
         pin_ioc.modify(IoConfiguration::EDGE_IRQ_EN::CLEAR);
     }
 
     /// Configures pin for UART receive (RX).
     pub fn enable_uart_rx(&self) {
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
 
         pin_ioc.modify(IoConfiguration::PORT_ID::UART_RX);
         self.set_input_mode(hil::gpio::InputMode::PullNone);
@@ -119,8 +119,8 @@ impl IocfgPin {
 
     /// Configures pin for UART transmit (TX).
     pub fn enable_uart_tx(&self) {
-        let regs = IOC_BASE;
-        let pin_ioc = &regs.iocfg[self.pin];
+        let registers = IOC_BASE;
+        let pin_ioc = &registers.iocfg[self.pin];
 
         pin_ioc.modify(IoConfiguration::PORT_ID::UART_TX);
         self.set_input_mode(hil::gpio::InputMode::PullNone);

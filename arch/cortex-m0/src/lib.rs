@@ -113,7 +113,7 @@ EXC_RETURN_PSP:
 #[no_mangle]
 pub unsafe extern "C" fn switch_to_user(
     mut user_stack: *const u8,
-    process_regs: &mut [usize; 8],
+    process_registers: &mut [usize; 8],
 ) -> *mut u8 {
     asm!("
     /* Load non-hardware-stacked registers from Process stack */
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn switch_to_user(
     mov r9,  r5
     mov r8,  r4
     ldmia $2!, {r4-r7}
-    subs $2, 32 /* Restore pointer to process_regs
+    subs $2, 32 /* Restore pointer to process_registers
                 /* ldmia! added a 32-byte offset */
 
     /* Load bottom of stack into Process Stack Pointer */
@@ -132,8 +132,8 @@ pub unsafe extern "C" fn switch_to_user(
     /* SWITCH */
     svc 0xff /* It doesn't matter which SVC number we use here */
 
-    /* Store non-hardware-stacked registers in process_regs */
-    /* $2 still points to process_regs because we are clobbering all */
+    /* Store non-hardware-stacked registers in process_registers */
+    /* $2 still points to process_registers because we are clobbering all */
     /* non-hardware-stacked registers */
     str r4, [$2, #16]
     str r5, [$2, #20]
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn switch_to_user(
 
     "
     : "={r0}"(user_stack)
-    : "{r0}"(user_stack), "{r1}"(process_regs)
+    : "{r0}"(user_stack), "{r1}"(process_registers)
     : "r4","r5","r6","r7","r8","r9","r10","r11");
     user_stack as *mut u8
 }

@@ -3,7 +3,7 @@
 //! Minimal implementation to support activation of the reset button on
 //! nRF52-DK.
 
-use kernel::common::regs::ReadWrite;
+use kernel::common::registers::ReadWrite;
 use kernel::common::StaticRef;
 
 const UICR_BASE: StaticRef<UicrRegisters> =
@@ -71,11 +71,11 @@ impl Uicr {
     }
 
     pub fn set_psel0_reset_pin(&self, pin: usize) {
-        let regs = &*self.registers;
-        regs.pselreset0.set(pin as u32);
+        let registers = &*self.registers;
+        registers.pselreset0.set(pin as u32);
     }
     pub fn set_psel1_reset_pin(&self, pin: usize) {
-        let regs = &*self.registers;
-        regs.pselreset1.set(pin as u32);
+        let registers = &*self.registers;
+        registers.pselreset1.set(pin as u32);
     }
 }

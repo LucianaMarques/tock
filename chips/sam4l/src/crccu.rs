@@ -49,7 +49,7 @@
 // - Support continuous-mode CRC
 
 use core::cell::Cell;
-use kernel::common::regs::{FieldValue, ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{FieldValue, ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::crc::{self, CrcAlg};
 use kernel::ReturnCode;
@@ -307,32 +307,32 @@ impl Crccu<'a> {
 
     /// Handle an interrupt from the CRCCU
     pub fn handle_interrupt(&mut self) {
-        let regs: &CrccuRegisters = &*self.registers;
+        let registers: &CrccuRegisters = &*self.registers;
 
-        if regs.isr.is_set(Interrupt::ERR) {
+        if registers.isr.is_set(Interrupt::ERR) {
             // A CRC error has occurred
         }
 
-        if regs.dmaisr.is_set(DmaInterrupt::DMA) {
+        if registers.dmaisr.is_set(DmaInterrupt::DMA) {
             // A DMA transfer has completed
 
             if self.get_tcr().interrupt_enabled() {
                 if let Some(client) = self.get_client() {
-                    let result = post_process(regs.sr.read(Status::CRC), self.alg.get());
+                    let result = post_process(registers.sr.read(Status::CRC), self.alg.get());
                     client.receive_result(result);
                 }
 
                 // Disable the unit
-                regs.mr.write(Mode::ENABLE::Disabled);
+                registers.mr.write(Mode::ENABLE::Disabled);
 
                 // Reset CTRL.IEN (for our own statekeeping)
                 self.set_descriptor(0, TCR::default(), 0);
 
                 // Disable DMA interrupt
-                regs.dmaidr.write(DmaInterrupt::DMA::SET);
+                registers.dmaidr.write(DmaInterrupt::DMA::SET);
 
                 // Disable DMA channel
-                regs.dmadis.write(DmaDisable::DMADIS::SET);
+                registers.dmadis.write(DmaDisable::DMADIS::SET);
             }
         }
     }
@@ -341,7 +341,7 @@ impl Crccu<'a> {
 // Implement the generic CRC interface with the CRCCU
 impl crc::CRC for Crccu<'a> {
     fn compute(&self, data: &[u8], alg: CrcAlg) -> ReturnCode {
-        let regs: &CrccuRegisters = &*self.registers;
+        let registers: &CrccuRegisters = &*self.registers;
 
         self.init();
 
@@ -359,13 +359,13 @@ impl crc::CRC for Crccu<'a> {
         self.enable();
 
         // Enable DMA interrupt
-        regs.dmaier.write(DmaInterrupt::DMA::SET);
+        registers.dmaier.write(DmaInterrupt::DMA::SET);
 
         // Enable error interrupt
-        regs.ier.write(Interrupt::ERR::SET);
+        registers.ier.write(Interrupt::ERR::SET);
 
         // Reset intermediate CRC value
-        regs.cr.write(Control::RESET::SET);
+        registers.cr.write(Control::RESET::SET);
 
         // Configure the data transfer
         let addr = data.as_ptr() as u32;
@@ -380,18 +380,18 @@ impl crc::CRC for Crccu<'a> {
         let ctrl = TCR::new(true, tr_width, len);
         let crc = 0;
         self.set_descriptor(addr, ctrl, crc);
-        regs.dscr.set(self.descriptor() as u32);
+        registers.dscr.set(self.descriptor() as u32);
 
         // Record what algorithm was requested
         self.alg.set(alg);
 
         // Configure the unit to compute a checksum
-        regs.mr.write(
+        registers.mr.write(
             Mode::DIVIDER.val(0) + poly_for_alg(alg) + Mode::COMPARE::CLEAR + Mode::ENABLE::Enabled,
         );
 
         // Enable DMA channel
-        regs.dmaen.write(DmaEnable::DMAEN::SET);
+        registers.dmaen.write(DmaEnable::DMAEN::SET);
 
         return ReturnCode::SUCCESS;
     }

@@ -7,7 +7,7 @@
 use core::cell::Cell;
 use core::ops::{Index, IndexMut};
 use ioc;
-use kernel::common::regs::{ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil;
 
@@ -78,8 +78,8 @@ impl hil::gpio::Pin for GPIOPin {
         // Disable input in the io configuration
         ioc::IOCFG[self.pin].enable_output();
         // Enable data output
-        let regs = &*self.registers;
-        regs.doe.set(regs.doe.get() | self.pin_mask);
+        let registers = &*self.registers;
+        registers.doe.set(registers.doe.get() | self.pin_mask);
     }
 
     fn make_input(&self) {
@@ -92,23 +92,23 @@ impl hil::gpio::Pin for GPIOPin {
     }
 
     fn set(&self) {
-        let regs = &*self.registers;
-        regs.dout_set.set(self.pin_mask);
+        let registers = &*self.registers;
+        registers.dout_set.set(self.pin_mask);
     }
 
     fn clear(&self) {
-        let regs = &*self.registers;
-        regs.dout_clr.set(self.pin_mask);
+        let registers = &*self.registers;
+        registers.dout_clr.set(self.pin_mask);
     }
 
     fn toggle(&self) {
-        let regs = &*self.registers;
-        regs.dout_tgl.set(self.pin_mask);
+        let registers = &*self.registers;
+        registers.dout_tgl.set(self.pin_mask);
     }
 
     fn read(&self) -> bool {
-        let regs = &*self.registers;
-        regs.din.get() & self.pin_mask != 0
+        let registers = &*self.registers;
+        registers.din.get() & self.pin_mask != 0
     }
 
     fn enable_interrupt(&self, client_data: usize, mode: hil::gpio::InterruptMode) {
@@ -141,10 +141,10 @@ impl IndexMut<usize> for Port {
 
 impl Port {
     pub fn handle_interrupt(&self) {
-        let regs = GPIO_BASE;
-        let evflags = regs.evflags.get();
+        let registers = GPIO_BASE;
+        let evflags = registers.evflags.get();
         // Clear all interrupts by setting their bits to 1 in evflags
-        regs.evflags.set(evflags);
+        registers.evflags.set(evflags);
 
         // evflags indicate which pins has triggered an interrupt,
         // we need to call the respective handler for positive bit in evflags.

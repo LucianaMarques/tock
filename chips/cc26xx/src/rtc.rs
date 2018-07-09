@@ -1,7 +1,7 @@
 //! RTC driver, sensortag family
 
 use core::cell::Cell;
-use kernel::common::regs::{ReadOnly, ReadWrite};
+use kernel::common::registers::{ReadOnly, ReadWrite};
 use kernel::common::StaticRef;
 use kernel::hil::time::{self, Alarm, Frequency, Time};
 
@@ -76,21 +76,21 @@ impl Rtc {
     }
 
     pub fn start(&self) {
-        let regs = &*self.registers;
-        regs.ctl.write(Control::ENABLE::SET);
+        let registers = &*self.registers;
+        registers.ctl.write(Control::ENABLE::SET);
 
-        regs.sync.get();
+        registers.sync.get();
     }
 
     pub fn stop(&self) {
-        let regs = &*self.registers;
-        regs.ctl.write(Control::ENABLE::CLEAR);
+        let registers = &*self.registers;
+        registers.ctl.write(Control::ENABLE::CLEAR);
 
-        regs.sync.get();
+        registers.sync.get();
     }
 
     fn read_counter(&self) -> u32 {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         /*
             SEC can change during the SUBSEC read, so we need to be certain
@@ -100,28 +100,28 @@ impl Rtc {
         let mut current_subsec: u32 = 0;
         let mut after_subsec_read: u32 = 1;
         while current_sec != after_subsec_read {
-            current_sec = regs.sec.get();
-            current_subsec = regs.subsec.get();
-            after_subsec_read = regs.sec.get();
+            current_sec = registers.sec.get();
+            current_subsec = registers.subsec.get();
+            after_subsec_read = registers.sec.get();
         }
 
         return (current_sec << 16) | (current_subsec >> 16);
     }
 
     pub fn is_running(&self) -> bool {
-        let regs = &*self.registers;
-        regs.channel_ctl.read(ChannelControl::CH1_EN) != 0
+        let registers = &*self.registers;
+        registers.channel_ctl.read(ChannelControl::CH1_EN) != 0
     }
 
     pub fn handle_interrupt(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         // Event flag is cleared when you set it
-        regs.evflags.write(EvFlags::CH1::SET);
-        regs.ctl.modify(Control::COMB_EV_MASK::NoEvent);
-        regs.channel_ctl.modify(ChannelControl::CH1_EN::CLEAR);
+        registers.evflags.write(EvFlags::CH1::SET);
+        registers.ctl.modify(Control::COMB_EV_MASK::NoEvent);
+        registers.channel_ctl.modify(ChannelControl::CH1_EN::CLEAR);
 
-        regs.sync.get();
+        registers.sync.get();
 
         self.callback.get().map(|cb| cb.fired());
     }
@@ -146,12 +146,12 @@ impl Time for Rtc {
     type Frequency = RtcFreq;
 
     fn disable(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
-        regs.ctl.modify(Control::COMB_EV_MASK::NoEvent);
-        regs.channel_ctl.modify(ChannelControl::CH1_EN::CLEAR);
+        registers.ctl.modify(Control::COMB_EV_MASK::NoEvent);
+        registers.channel_ctl.modify(ChannelControl::CH1_EN::CLEAR);
 
-        regs.sync.get();
+        registers.sync.get();
     }
 
     fn is_armed(&self) -> bool {
@@ -165,17 +165,17 @@ impl Alarm for Rtc {
     }
 
     fn set_alarm(&self, tics: u32) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
-        regs.ctl.modify(Control::COMB_EV_MASK::Channel1);
-        regs.channel1_cmp.set(tics);
-        regs.channel_ctl.modify(ChannelControl::CH1_EN::SET);
+        registers.ctl.modify(Control::COMB_EV_MASK::Channel1);
+        registers.channel1_cmp.set(tics);
+        registers.channel_ctl.modify(ChannelControl::CH1_EN::SET);
 
-        regs.sync.get();
+        registers.sync.get();
     }
 
     fn get_alarm(&self) -> u32 {
-        let regs = &*self.registers;
-        regs.channel1_cmp.get()
+        let registers = &*self.registers;
+        registers.channel1_cmp.get()
     }
 }

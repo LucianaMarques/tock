@@ -33,7 +33,7 @@
 //! * Francine Mäkelä
 //! * Date: May 04, 2018
 
-use kernel::common::regs::{FieldValue, ReadWrite};
+use kernel::common::registers::{FieldValue, ReadWrite};
 use kernel::common::StaticRef;
 
 const PPI_BASE: StaticRef<PpiRegisters> =
@@ -163,12 +163,12 @@ impl Ppi {
     }
 
     pub fn enable(&self, channels: FieldValue<u32, Channel::Register>) {
-        let regs = &*self.registers;
-        regs.chenset.write(channels);
+        let registers = &*self.registers;
+        registers.chenset.write(channels);
     }
 
     pub fn disable(&self, channels: FieldValue<u32, Channel::Register>) {
-        let regs = &*self.registers;
-        regs.chenclr.write(channels);
+        let registers = &*self.registers;
+        registers.chenclr.write(channels);
     }
 }

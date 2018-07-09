@@ -1,7 +1,7 @@
 //! Implementation of the SAM4L TRNG.
 
 use kernel::common::cells::OptionalCell;
-use kernel::common::regs::{ReadOnly, WriteOnly};
+use kernel::common::registers::{ReadOnly, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::rng::{self, Continue};
 use pm;
@@ -44,7 +44,7 @@ const BASE_ADDRESS: StaticRef<TrngRegisters> =
     unsafe { StaticRef::new(0x40068000 as *const TrngRegisters) };
 
 pub struct Trng<'a> {
-    regs: StaticRef<TrngRegisters>,
+    registers: StaticRef<TrngRegisters>,
     client: OptionalCell<&'a rng::Client>,
 }
 
@@ -54,28 +54,29 @@ const KEY: u32 = 0x524e47;
 impl Trng<'a> {
     const fn new() -> Trng<'a> {
         Trng {
-            regs: BASE_ADDRESS,
+            registers: BASE_ADDRESS,
             client: OptionalCell::empty(),
         }
     }
 
     pub fn handle_interrupt(&self) {
-        let regs = &*self.regs;
+        let registers = &*self.registers;
 
-        if !regs.imr.is_set(Interrupt::DATRDY) {
+        if !registers.imr.is_set(Interrupt::DATRDY) {
             return;
         }
-        regs.idr.write(Interrupt::DATRDY::SET);
+        registers.idr.write(Interrupt::DATRDY::SET);
 
         self.client.map(|client| {
             let result = client.randomness_available(&mut TrngIter(self));
             if let Continue::Done = result {
                 // disable controller
-                regs.cr
+                registers
+                    .cr
                     .write(Control::KEY.val(KEY) + Control::ENABLE::Disable);
                 pm::disable_clock(pm::Clock::PBA(pm::PBAClock::TRNG));
             } else {
-                regs.ier.write(Interrupt::DATRDY::SET);
+                registers.ier.write(Interrupt::DATRDY::SET);
             }
         });
     }
@@ -91,9 +92,9 @@ impl Iterator for TrngIter<'a, 'b> {
     type Item = u32;
 
     fn next(&mut self) -> Option<u32> {
-        let regs = &*self.0.regs;
-        if regs.isr.is_set(Interrupt::DATRDY) {
-            Some(regs.odata.read(OutputData::ODATA))
+        let registers = &*self.0.registers;
+        if registers.isr.is_set(Interrupt::DATRDY) {
+            Some(registers.odata.read(OutputData::ODATA))
         } else {
             None
         }
@@ -102,11 +103,12 @@ impl Iterator for TrngIter<'a, 'b> {
 
 impl rng::RNG for Trng<'a> {
     fn get(&self) {
-        let regs = &*self.regs;
+        let registers = &*self.registers;
         pm::enable_clock(pm::Clock::PBA(pm::PBAClock::TRNG));
 
-        regs.cr
+        registers
+            .cr
             .write(Control::KEY.val(KEY) + Control::ENABLE::Enable);
-        regs.ier.write(Interrupt::DATRDY::SET);
+        registers.ier.write(Interrupt::DATRDY::SET);
     }
 }

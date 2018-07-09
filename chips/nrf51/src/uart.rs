@@ -1,7 +1,7 @@
 use core::cell::Cell;
 use kernel::common::cells::OptionalCell;
 use kernel::common::cells::TakeCell;
-use kernel::common::regs::{ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::uart;
 use nrf5x::pinmux::Pinmux;
@@ -179,70 +179,70 @@ impl UART {
     /// * pin 10: CTS
     /// * pin 11: RX
     pub fn configure(&self, tx: Pinmux, rx: Pinmux, cts: Pinmux, rts: Pinmux) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
-        regs.pseltxd.write(Psel::PIN.val(tx.into()));
-        regs.pselrxd.write(Psel::PIN.val(rx.into()));
-        regs.pselcts.write(Psel::PIN.val(cts.into()));
-        regs.pselrts.write(Psel::PIN.val(rts.into()));
+        registers.pseltxd.write(Psel::PIN.val(tx.into()));
+        registers.pselrxd.write(Psel::PIN.val(rx.into()));
+        registers.pselcts.write(Psel::PIN.val(cts.into()));
+        registers.pselrts.write(Psel::PIN.val(rts.into()));
     }
 
     fn set_baud_rate(&self, baud_rate: u32) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         match baud_rate {
-            1200 => regs.baudrate.write(Baudrate::BAUDRATE::Baud1200),
-            2400 => regs.baudrate.write(Baudrate::BAUDRATE::Baud2400),
-            4800 => regs.baudrate.write(Baudrate::BAUDRATE::Baud4800),
-            9600 => regs.baudrate.write(Baudrate::BAUDRATE::Baud9600),
-            14400 => regs.baudrate.write(Baudrate::BAUDRATE::Baud14400),
-            19200 => regs.baudrate.write(Baudrate::BAUDRATE::Baud19200),
-            28800 => regs.baudrate.write(Baudrate::BAUDRATE::Baud28800),
-            38400 => regs.baudrate.write(Baudrate::BAUDRATE::Baud38400),
-            57600 => regs.baudrate.write(Baudrate::BAUDRATE::Baud57600),
-            76800 => regs.baudrate.write(Baudrate::BAUDRATE::Baud76800),
-            115200 => regs.baudrate.write(Baudrate::BAUDRATE::Baud115200),
-            230400 => regs.baudrate.write(Baudrate::BAUDRATE::Baud230400),
-            250000 => regs.baudrate.write(Baudrate::BAUDRATE::Baud250000),
-            460800 => regs.baudrate.write(Baudrate::BAUDRATE::Baud460800),
-            1000000 => regs.baudrate.write(Baudrate::BAUDRATE::Baud1M),
+            1200 => registers.baudrate.write(Baudrate::BAUDRATE::Baud1200),
+            2400 => registers.baudrate.write(Baudrate::BAUDRATE::Baud2400),
+            4800 => registers.baudrate.write(Baudrate::BAUDRATE::Baud4800),
+            9600 => registers.baudrate.write(Baudrate::BAUDRATE::Baud9600),
+            14400 => registers.baudrate.write(Baudrate::BAUDRATE::Baud14400),
+            19200 => registers.baudrate.write(Baudrate::BAUDRATE::Baud19200),
+            28800 => registers.baudrate.write(Baudrate::BAUDRATE::Baud28800),
+            38400 => registers.baudrate.write(Baudrate::BAUDRATE::Baud38400),
+            57600 => registers.baudrate.write(Baudrate::BAUDRATE::Baud57600),
+            76800 => registers.baudrate.write(Baudrate::BAUDRATE::Baud76800),
+            115200 => registers.baudrate.write(Baudrate::BAUDRATE::Baud115200),
+            230400 => registers.baudrate.write(Baudrate::BAUDRATE::Baud230400),
+            250000 => registers.baudrate.write(Baudrate::BAUDRATE::Baud250000),
+            460800 => registers.baudrate.write(Baudrate::BAUDRATE::Baud460800),
+            1000000 => registers.baudrate.write(Baudrate::BAUDRATE::Baud1M),
             _ => panic!("Illegal baud rate"),
         }
     }
 
     pub fn enable(&self) {
-        let regs = &*self.registers;
-        regs.enable.write(Enable::ENABLE::ON);
+        let registers = &*self.registers;
+        registers.enable.write(Enable::ENABLE::ON);
     }
 
     pub fn enable_rx_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenset.write(Interrupt::RXDRDY::SET);
+        let registers = &*self.registers;
+        registers.intenset.write(Interrupt::RXDRDY::SET);
     }
 
     pub fn enable_tx_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenset.write(Interrupt::TXDRDY::SET);
+        let registers = &*self.registers;
+        registers.intenset.write(Interrupt::TXDRDY::SET);
     }
 
     pub fn disable_rx_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenclr.write(Interrupt::RXDRDY::SET);
+        let registers = &*self.registers;
+        registers.intenclr.write(Interrupt::RXDRDY::SET);
     }
 
     pub fn disable_tx_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenclr.write(Interrupt::TXDRDY::SET);
+        let registers = &*self.registers;
+        registers.intenclr.write(Interrupt::TXDRDY::SET);
     }
 
     pub fn handle_interrupt(&mut self) {
-        let regs = &*self.registers;
-        let tx = regs.event_txdrdy.is_set(Event::READY);
+        let registers = &*self.registers;
+        let tx = registers.event_txdrdy.is_set(Event::READY);
 
         if tx {
-            regs.event_txdrdy.write(Event::READY::CLEAR);
+            registers.event_txdrdy.write(Event::READY::CLEAR);
 
             if self.len.get() == self.index.get() {
-                regs.task_stoptx.write(Task::ENABLE::SET);
+                registers.task_stoptx.write(Task::ENABLE::SET);
 
                 // Signal client write done
                 self.client.map(|client| {
@@ -255,8 +255,8 @@ impl UART {
             }
 
             self.buffer.map(|buffer| {
-                regs.event_txdrdy.write(Event::READY::CLEAR);
-                regs.txd.set(buffer[self.index.get()] as u32);
+                registers.event_txdrdy.write(Event::READY::CLEAR);
+                registers.txd.set(buffer[self.index.get()] as u32);
                 let next_index = self.index.get() + 1;
                 self.index.set(next_index);
             });
@@ -264,25 +264,25 @@ impl UART {
     }
 
     pub unsafe fn send_byte(&self, byte: u8) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         self.index.set(1);
         self.len.set(1);
 
-        regs.event_txdrdy.write(Event::READY::CLEAR);
+        registers.event_txdrdy.write(Event::READY::CLEAR);
         self.enable_tx_interrupts();
-        regs.task_starttx.set(1);
-        regs.txd.set(byte as u32);
+        registers.task_starttx.set(1);
+        registers.txd.set(byte as u32);
     }
 
     pub fn tx_ready(&self) -> bool {
-        let regs = &*self.registers;
-        regs.event_txdrdy.is_set(Event::READY)
+        let registers = &*self.registers;
+        registers.event_txdrdy.is_set(Event::READY)
     }
 
     fn rx_ready(&self) -> bool {
-        let regs = &*self.registers;
-        regs.event_rxdrdy.is_set(Event::READY)
+        let registers = &*self.registers;
+        registers.event_rxdrdy.is_set(Event::READY)
     }
 }
 
@@ -297,7 +297,7 @@ impl uart::UART for UART {
     }
 
     fn transmit(&self, tx_data: &'static mut [u8], tx_len: usize) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         if tx_len == 0 {
             return;
@@ -306,21 +306,21 @@ impl uart::UART for UART {
         self.index.set(1);
         self.len.set(tx_len);
 
-        regs.event_txdrdy.write(Event::READY::CLEAR);
+        registers.event_txdrdy.write(Event::READY::CLEAR);
         self.enable_tx_interrupts();
-        regs.task_starttx.set(1);
-        regs.txd.set(tx_data[0] as u32);
+        registers.task_starttx.set(1);
+        registers.txd.set(tx_data[0] as u32);
         self.buffer.replace(tx_data);
     }
 
     // Blocking implementation
     fn receive(&self, rx_buffer: &'static mut [u8], rx_len: usize) {
-        let regs = &*self.registers;
-        regs.task_startrx.set(1);
+        let registers = &*self.registers;
+        registers.task_startrx.set(1);
         let mut i = 0;
         while i < rx_len {
             while !self.rx_ready() {}
-            rx_buffer[i] = regs.rxd.get() as u8;
+            rx_buffer[i] = registers.rxd.get() as u8;
             i += 1;
         }
     }

@@ -11,7 +11,7 @@
 //! It also manages the clocks attached to almost every peripheral, which needs to
 //! be enabled before usage.
 
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 
 #[repr(C)]
@@ -89,10 +89,10 @@ const PRCM_BASE: StaticRef<PrcmRegisters> =
 
 // To save changes to the PRCM, we need to trigger.
 fn prcm_commit() {
-    let regs = PRCM_BASE;
-    regs.clk_load_ctl.write(ClockLoad::LOAD::SET);
+    let registers = PRCM_BASE;
+    registers.clk_load_ctl.write(ClockLoad::LOAD::SET);
     // Wait for the settings to take effect
-    while !regs.clk_load_ctl.is_set(ClockLoad::LOAD_DONE) {}
+    while !registers.clk_load_ctl.is_set(ClockLoad::LOAD_DONE) {}
 }
 
 pub enum PowerDomain {
@@ -108,14 +108,14 @@ pub struct Power(());
 
 impl Power {
     pub fn enable_domain(domain: PowerDomain) {
-        let regs = PRCM_BASE;
+        let registers = PRCM_BASE;
 
         match domain {
             PowerDomain::Peripherals => {
-                regs.pd_ctl0.modify(PowerDomain0::PERIPH_ON::SET);
+                registers.pd_ctl0.modify(PowerDomain0::PERIPH_ON::SET);
             }
             PowerDomain::Serial => {
-                regs.pd_ctl0.modify(PowerDomain0::SERIAL_ON::SET);
+                registers.pd_ctl0.modify(PowerDomain0::SERIAL_ON::SET);
             }
             _ => {
                 panic!("Tried to turn on a power domain not yet specified!");
@@ -124,10 +124,10 @@ impl Power {
     }
 
     pub fn is_enabled(domain: PowerDomain) -> bool {
-        let regs = PRCM_BASE;
+        let registers = PRCM_BASE;
         match domain {
-            PowerDomain::Peripherals => regs.pd_stat0_periph.is_set(PowerDomainSingle::ON),
-            PowerDomain::Serial => regs.pd_stat0_serial.is_set(PowerDomainSingle::ON),
+            PowerDomain::Peripherals => registers.pd_stat0_periph.is_set(PowerDomainSingle::ON),
+            PowerDomain::Serial => registers.pd_stat0_serial.is_set(PowerDomainSingle::ON),
             _ => false,
         }
     }
@@ -137,21 +137,26 @@ pub struct Clock(());
 
 impl Clock {
     pub fn enable_gpio() {
-        let regs = PRCM_BASE;
-        regs.gpio_clk_gate_run.write(ClockGate::CLK_EN::SET);
-        regs.gpio_clk_gate_sleep.write(ClockGate::CLK_EN::SET);
-        regs.gpio_clk_gate_deep_sleep.write(ClockGate::CLK_EN::SET);
+        let registers = PRCM_BASE;
+        registers.gpio_clk_gate_run.write(ClockGate::CLK_EN::SET);
+        registers.gpio_clk_gate_sleep.write(ClockGate::CLK_EN::SET);
+        registers
+            .gpio_clk_gate_deep_sleep
+            .write(ClockGate::CLK_EN::SET);
 
         prcm_commit();
     }
 
     pub fn enable_trng() {
-        let regs = PRCM_BASE;
-        regs.sec_dma_clk_run
+        let registers = PRCM_BASE;
+        registers
+            .sec_dma_clk_run
             .modify(SECDMAClockGate::TRNG_CLK_EN::SET);
-        regs.sec_dma_clk_sleep
+        registers
+            .sec_dma_clk_sleep
             .modify(SECDMAClockGate::TRNG_CLK_EN::SET);
-        regs.sec_dma_clk_deep_sleep
+        registers
+            .sec_dma_clk_deep_sleep
             .modify(SECDMAClockGate::TRNG_CLK_EN::SET);
 
         prcm_commit();
@@ -159,10 +164,12 @@ impl Clock {
 
     /// Enables UART clocks for run, sleep and deep sleep mode.
     pub fn enable_uart() {
-        let regs = PRCM_BASE;
-        regs.uart_clk_gate_run.modify(ClockGate::CLK_EN::SET);
-        regs.uart_clk_gate_sleep.modify(ClockGate::CLK_EN::SET);
-        regs.uart_clk_gate_deep_sleep.modify(ClockGate::CLK_EN::SET);
+        let registers = PRCM_BASE;
+        registers.uart_clk_gate_run.modify(ClockGate::CLK_EN::SET);
+        registers.uart_clk_gate_sleep.modify(ClockGate::CLK_EN::SET);
+        registers
+            .uart_clk_gate_deep_sleep
+            .modify(ClockGate::CLK_EN::SET);
 
         prcm_commit();
     }

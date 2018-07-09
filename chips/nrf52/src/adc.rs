@@ -1,7 +1,7 @@
 //! ADC driver for the nRF52. Uses the SAADC peripheral.
 
 use kernel::common::cells::{OptionalCell, VolatileCell};
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil;
 use kernel::ReturnCode;
@@ -263,21 +263,21 @@ impl Adc {
     }
 
     pub fn handle_interrupt(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         // Determine what event occurred.
-        if regs.events_started.is_set(EVENT::EVENT) {
-            regs.events_started.write(EVENT::EVENT::CLEAR);
+        if registers.events_started.is_set(EVENT::EVENT) {
+            registers.events_started.write(EVENT::EVENT::CLEAR);
             // ADC has started, now issue the sample.
-            regs.tasks_sample.write(TASK::TASK::SET);
-        } else if regs.events_end.is_set(EVENT::EVENT) {
-            regs.events_end.write(EVENT::EVENT::CLEAR);
+            registers.tasks_sample.write(TASK::TASK::SET);
+        } else if registers.events_end.is_set(EVENT::EVENT) {
+            registers.events_end.write(EVENT::EVENT::CLEAR);
             // Reading finished. Turn off the ADC.
-            regs.tasks_stop.write(TASK::TASK::SET);
-        } else if regs.events_stopped.is_set(EVENT::EVENT) {
-            regs.events_stopped.write(EVENT::EVENT::CLEAR);
+            registers.tasks_stop.write(TASK::TASK::SET);
+        } else if registers.events_stopped.is_set(EVENT::EVENT) {
+            registers.events_stopped.write(EVENT::EVENT::CLEAR);
             // ADC is stopped. Disable and return value.
-            regs.enable.write(ENABLE::ENABLE::CLEAR);
+            registers.enable.write(ENABLE::ENABLE::CLEAR);
 
             // Left justify to meet HIL requirements.
             let val = unsafe { SAMPLE[0] } << 2;
@@ -293,39 +293,40 @@ impl hil::adc::Adc for Adc {
     type Channel = AdcChannel;
 
     fn sample(&self, channel: &Self::Channel) -> ReturnCode {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         // Positive goes to the channel passed in, negative not connected.
-        regs.ch[0].pselp.write(PSEL::PSEL.val(*channel as u32));
-        regs.ch[0].pseln.write(PSEL::PSEL::NotConnected);
+        registers.ch[0].pselp.write(PSEL::PSEL.val(*channel as u32));
+        registers.ch[0].pseln.write(PSEL::PSEL::NotConnected);
 
         // Configure the ADC for a single read.
-        regs.ch[0]
+        registers.ch[0]
             .config
             .write(CONFIG::GAIN::Gain1_4 + CONFIG::REFSEL::VDD1_4 + CONFIG::TACQ::us10);
 
         // Set max resolution.
-        regs.resolution.write(RESOLUTION::VAL::bit14);
+        registers.resolution.write(RESOLUTION::VAL::bit14);
 
         // Do one measurement.
-        regs.result_maxcnt.write(RESULT_MAXCNT::MAXCNT.val(1));
+        registers.result_maxcnt.write(RESULT_MAXCNT::MAXCNT.val(1));
         // Where to put the reading.
         unsafe {
-            regs.result_ptr.set(SAMPLE.as_ptr());
+            registers.result_ptr.set(SAMPLE.as_ptr());
         }
 
         // No automatic sampling, will trigger manually.
-        regs.samplerate.write(SAMPLERATE::MODE::Task);
+        registers.samplerate.write(SAMPLERATE::MODE::Task);
 
         // Enable the ADC
-        regs.enable.write(ENABLE::ENABLE::SET);
+        registers.enable.write(ENABLE::ENABLE::SET);
 
         // Enable started, sample end, and stopped interrupts.
-        regs.inten
+        registers
+            .inten
             .write(INTEN::STARTED::SET + INTEN::END::SET + INTEN::STOPPED::SET);
 
         // Start the SAADC and wait for the started interrupt.
-        regs.tasks_start.write(TASK::TASK::SET);
+        registers.tasks_start.write(TASK::TASK::SET);
 
         ReturnCode::SUCCESS
     }

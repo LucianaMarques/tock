@@ -6,7 +6,7 @@ use core::cell::Cell;
 use core::cmp;
 use core::sync::atomic::{AtomicBool, Ordering};
 use kernel::common::cells::OptionalCell;
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil;
 use kernel::ReturnCode;
@@ -294,9 +294,9 @@ impl USARTRegManager<'a> {
         if pm::is_clock_enabled(usart.clock) == false {
             pm::enable_clock(usart.clock);
         }
-        let regs: &UsartRegisters = &*usart.registers;
+        let registers: &UsartRegisters = &*usart.registers;
         USARTRegManager {
-            registers: regs,
+            registers: registers,
             clock: usart.clock,
             rx_dma: usart.rx_dma.get(),
             tx_dma: usart.tx_dma.get(),

@@ -37,7 +37,7 @@ use core::cell::Cell;
 use core::convert::TryFrom;
 use kernel;
 use kernel::common::cells::OptionalCell;
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::ble_advertising;
 use kernel::hil::ble_advertising::RadioChannel;
@@ -550,80 +550,82 @@ impl Radio {
     }
 
     fn tx(&self) {
-        let regs = &*self.registers;
-        regs.event_ready.write(Event::READY::CLEAR);
-        regs.task_txen.write(Task::ENABLE::SET);
+        let registers = &*self.registers;
+        registers.event_ready.write(Event::READY::CLEAR);
+        registers.task_txen.write(Task::ENABLE::SET);
     }
 
     fn rx(&self) {
-        let regs = &*self.registers;
-        regs.event_ready.write(Event::READY::CLEAR);
-        regs.task_rxen.write(Task::ENABLE::SET);
+        let registers = &*self.registers;
+        registers.event_ready.write(Event::READY::CLEAR);
+        registers.task_rxen.write(Task::ENABLE::SET);
     }
 
     fn set_rx_address(&self) {
-        let regs = &*self.registers;
-        regs.rxaddresses.write(ReceiveAddresses::ADDRESS.val(1));
+        let registers = &*self.registers;
+        registers
+            .rxaddresses
+            .write(ReceiveAddresses::ADDRESS.val(1));
     }
 
     fn set_tx_address(&self) {
-        let regs = &*self.registers;
-        regs.txaddress.write(TransmitAddress::ADDRESS.val(0));
+        let registers = &*self.registers;
+        registers.txaddress.write(TransmitAddress::ADDRESS.val(0));
     }
 
     fn radio_on(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         // reset and enable power
-        regs.power.write(Task::ENABLE::CLEAR);
-        regs.power.write(Task::ENABLE::SET);
+        registers.power.write(Task::ENABLE::CLEAR);
+        registers.power.write(Task::ENABLE::SET);
     }
 
     fn radio_off(&self) {
-        let regs = &*self.registers;
-        regs.power.write(Task::ENABLE::CLEAR);
+        let registers = &*self.registers;
+        registers.power.write(Task::ENABLE::CLEAR);
     }
 
     fn set_tx_power(&self) {
-        let regs = &*self.registers;
-        regs.txpower.set(self.tx_power.get() as u32);
+        let registers = &*self.registers;
+        registers.txpower.set(self.tx_power.get() as u32);
     }
 
     fn set_dma_ptr(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         unsafe {
-            regs.packetptr.set(PAYLOAD.as_ptr() as u32);
+            registers.packetptr.set(PAYLOAD.as_ptr() as u32);
         }
     }
 
     #[inline(never)]
     pub fn handle_interrupt(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         self.disable_all_interrupts();
 
-        if regs.event_ready.is_set(Event::READY) {
-            regs.event_ready.write(Event::READY::CLEAR);
-            regs.event_end.write(Event::READY::CLEAR);
-            regs.task_start.write(Task::ENABLE::SET);
+        if registers.event_ready.is_set(Event::READY) {
+            registers.event_ready.write(Event::READY::CLEAR);
+            registers.event_end.write(Event::READY::CLEAR);
+            registers.task_start.write(Task::ENABLE::SET);
         }
 
-        if regs.event_address.is_set(Event::READY) {
-            regs.event_address.write(Event::READY::CLEAR);
+        if registers.event_address.is_set(Event::READY) {
+            registers.event_address.write(Event::READY::CLEAR);
         }
-        if regs.event_payload.is_set(Event::READY) {
-            regs.event_payload.write(Event::READY::CLEAR);
+        if registers.event_payload.is_set(Event::READY) {
+            registers.event_payload.write(Event::READY::CLEAR);
         }
 
         // tx or rx finished!
-        if regs.event_end.is_set(Event::READY) {
-            regs.event_end.write(Event::READY::CLEAR);
+        if registers.event_end.is_set(Event::READY) {
+            registers.event_end.write(Event::READY::CLEAR);
 
-            let result = if regs.crcstatus.is_set(Event::READY) {
+            let result = if registers.crcstatus.is_set(Event::READY) {
                 ReturnCode::SUCCESS
             } else {
                 ReturnCode::FAIL
             };
 
-            match regs.state.get() {
+            match registers.state.get() {
                 nrf5x::constants::RADIO_STATE_TXRU
                 | nrf5x::constants::RADIO_STATE_TXIDLE
                 | nrf5x::constants::RADIO_STATE_TXDISABLE
@@ -653,8 +655,8 @@ impl Radio {
     }
 
     pub fn enable_interrupts(&self) {
-        let regs = &*self.registers;
-        regs.intenset.write(
+        let registers = &*self.registers;
+        registers.intenset.write(
             Interrupt::READY::SET
                 + Interrupt::ADDRESS::SET
                 + Interrupt::PAYLOAD::SET
@@ -663,19 +665,19 @@ impl Radio {
     }
 
     pub fn enable_interrupt(&self, intr: u32) {
-        let regs = &*self.registers;
-        regs.intenset.set(intr);
+        let registers = &*self.registers;
+        registers.intenset.set(intr);
     }
 
     pub fn clear_interrupt(&self, intr: u32) {
-        let regs = &*self.registers;
-        regs.intenclr.set(intr);
+        let registers = &*self.registers;
+        registers.intenclr.set(intr);
     }
 
     pub fn disable_all_interrupts(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         // disable all possible interrupts
-        regs.intenclr.set(0xffffffff);
+        registers.intenclr.set(0xffffffff);
     }
 
     fn replace_radio_buffer(&self, buf: &'static mut [u8]) -> &'static mut [u8] {
@@ -711,19 +713,20 @@ impl Radio {
 
     // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part B], section 3.1.1 CRC Generation
     fn ble_set_crc_config(&self) {
-        let regs = &*self.registers;
-        regs.crccnf
+        let registers = &*self.registers;
+        registers
+            .crccnf
             .write(CrcConfiguration::LEN::THREE + CrcConfiguration::SKIPADDR::EXCLUDE);
-        regs.crcinit.set(nrf5x::constants::RADIO_CRCINIT_BLE);
-        regs.crcpoly.set(nrf5x::constants::RADIO_CRCPOLY_BLE);
+        registers.crcinit.set(nrf5x::constants::RADIO_CRCINIT_BLE);
+        registers.crcpoly.set(nrf5x::constants::RADIO_CRCPOLY_BLE);
     }
 
     // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part B], section 2.1.2 Access Address
     // Set access address to 0x8E89BED6
     fn ble_set_advertising_access_address(&self) {
-        let regs = &*self.registers;
-        regs.prefix0.set(0x0000008e);
-        regs.base0.set(0x89bed600);
+        let registers = &*self.registers;
+        registers.prefix0.set(0x0000008e);
+        registers.base0.set(0x89bed600);
     }
 
     // Packet configuration
@@ -736,11 +739,11 @@ impl Radio {
     // +----------+   +----------------+   +---------------+   +------------+
     //
     fn ble_set_packet_config(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
 
         // sets the header of PDU TYPE to 1 byte
         // sets the header length to 1 byte
-        regs.pcnf0.write(
+        registers.pcnf0.write(
             PacketConfiguration0::LFLEN.val(8)
                 + PacketConfiguration0::S0LEN.val(1)
                 + PacketConfiguration0::S1LEN::CLEAR
@@ -748,7 +751,7 @@ impl Radio {
                 + PacketConfiguration0::PLEN::EIGHT,
         );
 
-        regs.pcnf1.write(
+        registers.pcnf1.write(
             PacketConfiguration1::WHITEEN::ENABLED
                 + PacketConfiguration1::ENDIAN::LITTLE
                 + PacketConfiguration1::BALEN.val(3)
@@ -760,15 +763,15 @@ impl Radio {
     // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part A], 4.6 REFERENCE SIGNAL DEFINITION
     // Bit Rate = 1 Mb/s ±1 ppm
     fn ble_set_channel_rate(&self) {
-        let regs = &*self.registers;
-        regs.mode.write(Mode::MODE::BLE_1MBIT);
+        let registers = &*self.registers;
+        registers.mode.write(Mode::MODE::BLE_1MBIT);
     }
 
     // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part B], section 3.2 Data Whitening
     // Configure channel index to the LFSR and the hardware solves the rest
     fn ble_set_data_whitening(&self, channel: RadioChannel) {
-        let regs = &*self.registers;
-        regs.datawhiteiv.set(channel.get_channel_index());
+        let registers = &*self.registers;
+        registers.datawhiteiv.set(channel.get_channel_index());
     }
 
     // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part B], section 1.4.1
@@ -776,8 +779,9 @@ impl Radio {
     // Data:            0 - 36
     // Advertising:     37, 38, 39
     fn ble_set_channel_freq(&self, channel: RadioChannel) {
-        let regs = &*self.registers;
-        regs.frequency
+        let registers = &*self.registers;
+        registers
+            .frequency
             .write(Frequency::FREQUENCY.val(channel as u32));
     }
 

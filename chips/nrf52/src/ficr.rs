@@ -8,7 +8,7 @@
 //! - Date: November 27, 2017
 
 use core::fmt;
-use kernel::common::regs::ReadOnly;
+use kernel::common::registers::ReadOnly;
 use kernel::common::StaticRef;
 
 const FICR_BASE: StaticRef<FicrRegisters> =
@@ -261,16 +261,16 @@ impl Ficr {
     }
 
     fn part(&self) -> Part {
-        let regs = &*self.registers;
-        match regs.info_part.get() {
+        let registers = &*self.registers;
+        match registers.info_part.get() {
             0x52832 => Part::N52832,
             _ => Part::Unspecified,
         }
     }
 
     fn variant(&self) -> Variant {
-        let regs = &*self.registers;
-        match regs.info_variant.get() {
+        let registers = &*self.registers;
+        match registers.info_variant.get() {
             0x41414141 => Variant::AAAA,
             0x41414142 => Variant::AAAB,
             0x41414241 => Variant::AABA,
@@ -282,8 +282,8 @@ impl Ficr {
     }
 
     fn package(&self) -> Package {
-        let regs = &*self.registers;
-        match regs.info_package.get() {
+        let registers = &*self.registers;
+        match registers.info_package.get() {
             0x2000 => Package::QF,
             0x2001 => Package::CH,
             0x2002 => Package::CI,
@@ -293,8 +293,8 @@ impl Ficr {
     }
 
     fn ram(&self) -> Ram {
-        let regs = &*self.registers;
-        match regs.info_ram.get() {
+        let registers = &*self.registers;
+        match registers.info_ram.get() {
             0x10 => Ram::K16,
             0x20 => Ram::K32,
             0x40 => Ram::K64,
@@ -303,8 +303,8 @@ impl Ficr {
     }
 
     fn flash(&self) -> Flash {
-        let regs = &*self.registers;
-        match regs.info_flash.get() {
+        let registers = &*self.registers;
+        match registers.info_flash.get() {
             0x80 => Flash::K128,
             0x100 => Flash::K256,
             0x200 => Flash::K512,

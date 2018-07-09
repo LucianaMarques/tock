@@ -6,7 +6,7 @@ use core::cell::Cell;
 use core::cmp;
 use kernel::common::cells::OptionalCell;
 use kernel::common::cells::TakeCell;
-use kernel::common::regs::{FieldValue, ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{FieldValue, ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil::i2c;
 use {nrf5x, nrf5x::gpio, nrf5x::pinmux::Pinmux};
@@ -54,44 +54,44 @@ impl TWIM {
             sclpin.write_config(gpio::PinConfig::DRIVE::S0D1);
         }
 
-        let regs = &*self.registers;
-        regs.psel_scl.set(scl_idx);
-        regs.psel_sda.set(sda_idx);
+        let registers = &*self.registers;
+        registers.psel_scl.set(scl_idx);
+        registers.psel_sda.set(sda_idx);
     }
 
     /// Sets the I2C bus speed to one of three possible values
     /// enumerated in `Speed`.
     pub fn set_speed(&self, speed: FieldValue<u32, Frequency::Register>) {
-        let regs = &*self.registers;
-        regs.frequency.write(speed);
+        let registers = &*self.registers;
+        registers.frequency.write(speed);
     }
 
     /// Enables hardware TWIM peripheral.
     pub fn enable(&self) {
-        let regs = &*self.registers;
-        regs.enable.write(Twim::ENABLE::ON);
+        let registers = &*self.registers;
+        registers.enable.write(Twim::ENABLE::ON);
     }
 
     /// Disables hardware TWIM peripheral.
     pub fn disable(&self) {
-        let regs = &*self.registers;
-        regs.enable.write(Twim::ENABLE::OFF);
+        let registers = &*self.registers;
+        registers.enable.write(Twim::ENABLE::OFF);
     }
 
     fn start_read(&self) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         if self.rx_len.get() == 1 {
-            regs.shorts.write(Shorts::BB_STOP::SET);
+            registers.shorts.write(Shorts::BB_STOP::SET);
         } else {
-            regs.shorts.write(Shorts::BB_SUSPEND::SET);
+            registers.shorts.write(Shorts::BB_SUSPEND::SET);
         }
         self.tx_len.set(0);
         self.pos.set(0);
-        let regs = regs;
-        regs.intenset.write(InterruptEnable::RXREADY::SET);
-        regs.intenset.write(InterruptEnable::ERROR::SET);
+        let registers = registers;
+        registers.intenset.write(InterruptEnable::RXREADY::SET);
+        registers.intenset.write(InterruptEnable::ERROR::SET);
         // start the transfer
-        regs.tasks_startrx.write(Task::ENABLE::SET);
+        registers.tasks_startrx.write(Task::ENABLE::SET);
     }
 
     fn reply(&self, result: i2c::Error) {
@@ -106,65 +106,65 @@ impl TWIM {
     /// correct handler by the service_pending_interrupts() routine in
     /// chip.rs based on which peripheral is enabled.
     pub fn handle_interrupt(&self) {
-        let regs = &*self.registers;
-        if regs.events_rxdreceived.get() == 1 {
-            regs.events_rxdreceived.set(0);
+        let registers = &*self.registers;
+        if registers.events_rxdreceived.get() == 1 {
+            registers.events_rxdreceived.set(0);
             let pos = self.pos.get();
             self.pos.set(pos + 1);
             if self.pos.get() < self.rx_len.get() as usize {
-                let v = regs.rxd.read(Data::DATA);
+                let v = registers.rxd.read(Data::DATA);
                 self.buf.map(|buf| buf[pos] = v as u8);
                 if pos == self.rx_len.get() as usize - 2 {
-                    regs.shorts.write(Shorts::BB_STOP::SET);
+                    registers.shorts.write(Shorts::BB_STOP::SET);
                 };
-                regs.tasks_resume.write(Task::ENABLE::SET);
+                registers.tasks_resume.write(Task::ENABLE::SET);
             } else {
-                regs.shorts.set(0);
-                let v = regs.rxd.read(Data::DATA);
+                registers.shorts.set(0);
+                let v = registers.rxd.read(Data::DATA);
                 self.buf.map(|buf| buf[pos] = v as u8);
-                regs.intenclr.write(InterruptEnable::RXREADY::SET);
-                regs.intenclr.write(InterruptEnable::ERROR::SET);
+                registers.intenclr.write(InterruptEnable::RXREADY::SET);
+                registers.intenclr.write(InterruptEnable::ERROR::SET);
                 self.reply(i2c::Error::CommandComplete);
                 self.pos.set(0);
             }
         };
-        if regs.events_txdsent.get() == 1 {
-            regs.events_txdsent.set(0);
+        if registers.events_txdsent.get() == 1 {
+            registers.events_txdsent.set(0);
             let pos = self.pos.get() + 1;
             self.pos.set(pos);
             if pos < self.tx_len.get() as usize {
-                self.buf.map(|buf| regs.txd.set(buf[pos].into()));
+                self.buf.map(|buf| registers.txd.set(buf[pos].into()));
             } else {
                 if self.rx_len.get() > 0 {
-                    regs.intenclr.write(InterruptEnable::TXSENT::SET);
+                    registers.intenclr.write(InterruptEnable::TXSENT::SET);
                     self.start_read();
                 } else {
-                    regs.tasks_stop.write(Task::ENABLE::SET);
-                    regs.intenclr.write(InterruptEnable::TXSENT::SET);
-                    regs.intenclr.write(InterruptEnable::ERROR::SET);
+                    registers.tasks_stop.write(Task::ENABLE::SET);
+                    registers.intenclr.write(InterruptEnable::TXSENT::SET);
+                    registers.intenclr.write(InterruptEnable::ERROR::SET);
                     self.reply(i2c::Error::CommandComplete);
                 }
             }
         };
-        if regs.events_error.get() == 1 {
-            regs.events_error.set(0);
-            let errorsrc = if regs.errorsrc.is_set(ErrorSrc::OVERRUN) {
+        if registers.events_error.get() == 1 {
+            registers.events_error.set(0);
+            let errorsrc = if registers.errorsrc.is_set(ErrorSrc::OVERRUN) {
                 i2c::Error::Overrun
-            } else if regs.errorsrc.is_set(ErrorSrc::ADDRESSNACK) {
+            } else if registers.errorsrc.is_set(ErrorSrc::ADDRESSNACK) {
                 i2c::Error::AddressNak
-            } else if regs.errorsrc.is_set(ErrorSrc::DATANACK) {
+            } else if registers.errorsrc.is_set(ErrorSrc::DATANACK) {
                 i2c::Error::DataNak
             } else {
                 i2c::Error::CommandComplete
             };
-            regs.errorsrc.set(0);
+            registers.errorsrc.set(0);
             self.reply(errorsrc);
         }
     }
 
     pub fn is_enabled(&self) -> bool {
-        let regs = &*self.registers;
-        regs.enable.get() == 5
+        let registers = &*self.registers;
+        registers.enable.get() == 5
     }
 }
 
@@ -178,18 +178,18 @@ impl i2c::I2CMaster for TWIM {
     }
 
     fn write_read(&self, addr: u8, data: &'static mut [u8], write_len: u8, read_len: u8) {
-        let regs = &*self.registers;
+        let registers = &*self.registers;
         let buffer_len = cmp::min(data.len(), 255);
         self.tx_len.set(cmp::min(write_len, buffer_len as u8));
         self.rx_len.set(cmp::min(read_len, buffer_len as u8));
-        regs.intenset.write(InterruptEnable::TXSENT::SET);
-        regs.intenset.write(InterruptEnable::ERROR::SET);
+        registers.intenset.write(InterruptEnable::TXSENT::SET);
+        registers.intenset.write(InterruptEnable::ERROR::SET);
         // start the transfer
         self.pos.set(0);
-        regs.address.write(Address::ADDRESS.val(addr.into()));
-        regs.tasks_resume.write(Task::ENABLE::SET);
-        regs.tasks_starttx.write(Task::ENABLE::SET);
-        regs.txd.set(data[0].into());
+        registers.address.write(Address::ADDRESS.val(addr.into()));
+        registers.tasks_resume.write(Task::ENABLE::SET);
+        registers.tasks_starttx.write(Task::ENABLE::SET);
+        registers.txd.set(data[0].into());
         self.buf.replace(data);
     }
 
@@ -198,11 +198,11 @@ impl i2c::I2CMaster for TWIM {
     }
 
     fn read(&self, addr: u8, buffer: &'static mut [u8], len: u8) {
-        let regs = &*self.registers;
-        regs.address.set(addr as u32);
+        let registers = &*self.registers;
+        registers.address.set(addr as u32);
         let buffer_len = cmp::min(buffer.len(), 255);
         self.rx_len.set(cmp::min(len, buffer_len as u8));
-        regs.tasks_resume.write(Task::ENABLE::SET);
+        registers.tasks_resume.write(Task::ENABLE::SET);
         self.start_read();
         self.buf.replace(buffer);
     }

@@ -6,7 +6,7 @@
 //! - Date: May 26th, 2017
 
 use core::cell::Cell;
-use kernel::common::regs::{ReadOnly, ReadWrite, WriteOnly};
+use kernel::common::registers::{ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
 use kernel::hil;
 use kernel::ReturnCode;
@@ -137,7 +137,7 @@ impl Dac {
 
 impl hil::dac::DacChannel for Dac {
     fn initialize(&self) -> ReturnCode {
-        let regs: &DacRegisters = &*self.registers;
+        let registers: &DacRegisters = &*self.registers;
         if !self.enabled.get() {
             self.enabled.set(true);
 
@@ -145,7 +145,7 @@ impl hil::dac::DacChannel for Dac {
             pm::enable_clock(Clock::PBA(PBAClock::DACC));
 
             // Reset DACC
-            regs.cr.write(Control::SWRST::SET);
+            registers.cr.write(Control::SWRST::SET);
 
             // Set Mode Register
             // -half-word transfer mode
@@ -158,23 +158,23 @@ impl hil::dac::DacChannel for Dac {
                 + Mode::CLKDIV.val(0x60)
                 + Mode::TRGEN::InternalTrigger
                 + Mode::DACEN::SET;
-            regs.mr.write(mr);
+            registers.mr.write(mr);
         }
         ReturnCode::SUCCESS
     }
 
     fn set_value(&self, value: usize) -> ReturnCode {
-        let regs: &DacRegisters = &*self.registers;
+        let registers: &DacRegisters = &*self.registers;
         if !self.enabled.get() {
             ReturnCode::EOFF
         } else {
             // Check if ready to write to CDR
-            if !regs.isr.is_set(InterruptStatus::TXRDY) {
+            if !registers.isr.is_set(InterruptStatus::TXRDY) {
                 return ReturnCode::EBUSY;
             }
 
             // Write to CDR
-            regs.cdr.write(ConversionData::DATA.val(value as u32));
+            registers.cdr.write(ConversionData::DATA.val(value as u32));
             ReturnCode::SUCCESS
         }
     }

@@ -120,13 +120,13 @@ type Region = kernel::mpu::Region;
 
 impl kernel::mpu::MPU for MPU {
     fn enable_mpu(&self) {
-        let regs = &*self.0;
+        let registers = &*self.0;
 
         // Enable the MPU, disable it during HardFault/NMI handlers, allow
         // privileged code access to all unprotected memory.
-        regs.control.set(0b101);
+        registers.control.set(0b101);
 
-        let mpu_type = regs.mpu_type.get();
+        let mpu_type = registers.mpu_type.get();
         let regions = mpu_type.data_regions.get();
         if regions != 8 {
             panic!(
@@ -137,8 +137,8 @@ impl kernel::mpu::MPU for MPU {
     }
 
     fn disable_mpu(&self) {
-        let regs = &*self.0;
-        regs.control.set(0b0);
+        let registers = &*self.0;
+        registers.control.set(0b0);
     }
 
     fn create_region(
@@ -266,10 +266,12 @@ impl kernel::mpu::MPU for MPU {
     }
 
     fn set_mpu(&self, region: Region) {
-        let regs = &*self.0;
+        let registers = &*self.0;
 
-        regs.region_base_address.set(region.base_address());
+        registers.region_base_address.set(region.base_address());
 
-        regs.region_attributes_and_size.set(region.attributes());
+        registers
+            .region_attributes_and_size
+            .set(region.attributes());
     }
 }
