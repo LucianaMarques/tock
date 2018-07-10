@@ -36,6 +36,7 @@ alldoc:
 ci-travis:
 	@CI=true ./tools/run_cargo_fmt.sh diff
 	@CI=true cd libraries/tock-cells && cargo test
+	@CI=true cd libraries/tock-register-interface && cargo test
 	@CI=true make allboards
 	@CI=true make -C boards/nordic/nrf52dk debug
 	@CI=true tools/toc.sh
